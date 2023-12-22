@@ -6,6 +6,7 @@ theory Bell_Asymptotics
     Bell_Numbers_Spivey.Bell_Numbers 
     Stirling_Formula.Stirling_Formula
     Lambert_W.Lambert_W
+    "HOL-Real_Asymp.Real_Asymp"
 begin
 
 subsection \<open>Some preliminary generic results\<close>
@@ -555,6 +556,53 @@ proof -
       by (subst powr_realpow, auto)
     finally show ?thesis by simp
   qed
+qed
+
+lemma lovasz_step_1_1:
+  "(\<lambda>x. real (Bell x)) \<sim>[at_top]
+  (\<lambda>x. 1 / exp 1 * (\<Sum>k. real (k + k0)^x / fact (k + k0)))"
+proof -
+  have sumk0: "(\<lambda>k. real (k+k0)^x / fact (k+ k0)) sums
+    (exp 1 * Bell x - (\<Sum>i<k0. real i ^ x / fact i))" for x
+    by (subst sums_iff_shift)
+      (use dobinskis_formula_raw in auto)
+
+  have "(\<Sum>k. real (k + k0)^x / fact (k + k0)) =
+   (\<Sum>k. real k^x / fact k) - (\<Sum>i<k0. real i ^ x / fact i)" for x
+    by (metis (no_types) dobinskis_formula_raw sumk0 sums_unique)
+
+  then have *: "(\<lambda>x. 1 / exp 1 * (\<Sum>k. real (k + k0)^x / fact (k + k0))) =
+    (\<lambda>x. 1 / exp 1 * (\<Sum>k. real k^x / fact k) + (- 1 / exp 1 * (\<Sum>i<k0. real i ^ x / fact i)))"
+    using diff_divide_distrib by fastforce
+
+  have 1: "(\<lambda>x. real (Bell x)) \<sim>[at_top] (\<lambda>x. 1 / exp 1 * (\<Sum>k. real k ^ x / fact k)) "
+    unfolding dobinskis_formula
+    by auto
+
+  have o1:"(\<lambda>x. \<Sum>i<k0. real i ^ x / fact i) \<in> o(\<lambda>x. real k0 ^ x / fact k0)"
+    apply (intro big_sum_in_smallo)
+    by (auto intro!: big_sum_in_smallo smalloI_tendsto  LIMSEQ_abs_realpow_zero2 simp add: power_divide[symmetric])
+
+  have "sum (\<lambda>k. real k ^ x / fact k) {k0..k0} \<le> suminf (\<lambda>k. real k ^ x / fact k)" for x
+    by (intro sum_le_suminf)
+      (use dobinskis_formula in auto)
+
+  then have "real k0 ^ x / fact k0 \<le> exp 1 * Bell x" for x
+    unfolding dobinskis_formula
+    by auto
+    
+  then have o2:"(\<lambda>x. real k0 ^ x / fact k0) \<in> O(\<lambda>x. Bell x)"
+    unfolding bigo_def
+    apply auto[1]
+    by (meson eventually_sequentially exp_gt_zero)
+
+  have "(\<lambda>x. real (Bell x)) \<sim>[at_top]
+    (\<lambda>x. 1 / exp 1 * (\<Sum>k. real k^x / fact k) + (- 1 / exp 1 * (\<Sum>i<k0. real i ^ x / fact i)))"
+    apply (subst asymp_equiv_add_right'[OF _])
+    using landau_o.small_big_trans o1 o2 1 by auto
+    
+  thus ?thesis
+    using "*" by presburger
 qed
 
 end
