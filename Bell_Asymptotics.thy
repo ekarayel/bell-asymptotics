@@ -558,51 +558,116 @@ proof -
   qed
 qed
 
+lemma truncated_series_asymp_equiv:
+  assumes summable: "\<And>x. summable (f x)"
+  assumes o1: "(\<lambda>x. sum (f x) {..<y0}) \<in> o(\<lambda>x. \<Sum>y. f x (y + y0))"
+  shows
+    "(\<lambda>x. \<Sum>y. f x y) \<sim>[at_top]
+    (\<lambda>x. \<Sum>y. f x (y + y0))"
+proof -
+  have *:"(\<lambda>x. \<Sum>y. f x y) =
+    (\<lambda>x. (\<Sum>y. f x (y + y0)) + sum (f x) {..<y0})"
+    by (subst suminf_split_initial_segment[OF summable]) auto
+
+  show ?thesis
+    unfolding *
+    apply (subst asymp_equiv_add_right[OF o1])
+    by auto
+qed
+
+lemma truncated_series_asymp_equiv_1:
+  assumes summable: "\<And>x. summable (f x)"
+  assumes o1: "(\<lambda>x. sum (f x) {..<y0}) \<in> o(\<lambda>x. f x y0)"
+  assumes pos:"\<And>x y. f x y \<ge> (0::real)"
+  shows
+    "(\<lambda>x. \<Sum>y. f x y) \<sim>[at_top]
+    (\<lambda>x. \<Sum>y. f x (y + y0))"
+proof -
+  { fix x
+    have "f x y0 = sum (\<lambda>y. f x (y+y0)) {0..0}" by auto
+    also have "... \<le> (\<Sum>y. f x (y + y0))"
+      apply (intro sum_le_suminf)
+      using summable pos by auto
+    finally have "f x y0 \<le> (\<Sum>y. f x (y + y0))" by auto
+  }
+  then have "norm (f x y0) \<le> norm (\<Sum>y. f x (y + y0))" for x
+    by (simp add: summable pos suminf_nonneg)
+  then have "(\<lambda>x. f x y0) \<in> O(\<lambda>x. \<Sum>y. f x (y + y0))"
+    unfolding bigo_def
+    apply auto
+    by (metis (no_types, lifting) always_eventually mult_1 zero_less_one)
+
+  then have *: "(\<lambda>x. sum (f x) {..<y0}) \<in> o(\<lambda>x. \<Sum>y. f x (y + y0))"
+    using landau_o.small_big_trans o1 by blast
+  show ?thesis
+    using truncated_series_asymp_equiv[OF summable *] .
+qed
+
 lemma lovasz_step_1_1:
   "(\<lambda>x. real (Bell x)) \<sim>[at_top]
   (\<lambda>x. 1 / exp 1 * (\<Sum>k. real (k + k0)^x / fact (k + k0)))"
 proof -
+
   have sumk0: "(\<lambda>k. real (k+k0)^x / fact (k+ k0)) sums
     (exp 1 * Bell x - (\<Sum>i<k0. real i ^ x / fact i))" for x
     by (subst sums_iff_shift)
       (use dobinskis_formula_raw in auto)
 
-  have "(\<Sum>k. real (k + k0)^x / fact (k + k0)) =
-   (\<Sum>k. real k^x / fact k) - (\<Sum>i<k0. real i ^ x / fact i)" for x
-    by (metis (no_types) dobinskis_formula_raw sumk0 sums_unique)
-
-  then have *: "(\<lambda>x. 1 / exp 1 * (\<Sum>k. real (k + k0)^x / fact (k + k0))) =
-    (\<lambda>x. 1 / exp 1 * (\<Sum>k. real k^x / fact k) + (- 1 / exp 1 * (\<Sum>i<k0. real i ^ x / fact i)))"
-    using diff_divide_distrib by fastforce
-
-  have 1: "(\<lambda>x. real (Bell x)) \<sim>[at_top] (\<lambda>x. 1 / exp 1 * (\<Sum>k. real k ^ x / fact k)) "
-    unfolding dobinskis_formula
-    by auto
-
-  have o1:"(\<lambda>x. \<Sum>i<k0. real i ^ x / fact i) \<in> o(\<lambda>x. real k0 ^ x / fact k0)"
+  have o1:"(\<lambda>x. \<Sum>i<k0. real i ^ x / fact i) \<in> o((^) (real k0))"
     apply (intro big_sum_in_smallo)
-    by (auto intro!: big_sum_in_smallo smalloI_tendsto  LIMSEQ_abs_realpow_zero2 simp add: power_divide[symmetric])
+    by (auto intro!: big_sum_in_smallo smalloI_tendsto LIMSEQ_abs_realpow_zero2 simp add: power_divide[symmetric])
+  then have "(\<lambda>x. (\<Sum>k. real k ^ x / fact k)) \<sim>[at_top]
+      (\<lambda>x. (\<Sum>k. real (k + k0) ^ x / fact (k + k0)))"
+    apply (intro truncated_series_asymp_equiv_1)
+    by (auto simp add: dobinskis_formula(1))
 
-  have "sum (\<lambda>k. real k ^ x / fact k) {k0..k0} \<le> suminf (\<lambda>k. real k ^ x / fact k)" for x
-    by (intro sum_le_suminf)
-      (use dobinskis_formula in auto)
-
-  then have "real k0 ^ x / fact k0 \<le> exp 1 * Bell x" for x
-    unfolding dobinskis_formula
-    by auto
-    
-  then have o2:"(\<lambda>x. real k0 ^ x / fact k0) \<in> O(\<lambda>x. Bell x)"
-    unfolding bigo_def
-    apply auto[1]
-    by (meson eventually_sequentially exp_gt_zero)
-
-  have "(\<lambda>x. real (Bell x)) \<sim>[at_top]
-    (\<lambda>x. 1 / exp 1 * (\<Sum>k. real k^x / fact k) + (- 1 / exp 1 * (\<Sum>i<k0. real i ^ x / fact i)))"
-    apply (subst asymp_equiv_add_right'[OF _])
-    using landau_o.small_big_trans o1 o2 1 by auto
-    
   thus ?thesis
-    using "*" by presburger
+    unfolding dobinskis_formula
+    by (auto intro!: asymp_equiv_divide)
+qed
+
+lemma lovasz_step_1_2:
+  shows
+    "(\<lambda>x::nat. (\<Sum>k. real k powr (x - real k - 1/2) * exp (real k-1))) \<sim>[at_top]
+    (\<lambda>x::nat. (\<Sum>k. real (k + k0) powr (x - real (k + k0) - 1/2) * exp (real (k + k0)-1)))"
+proof -
+  let ?g = "\<lambda>x k. real k powr (x - real k - 1/2) * exp (real k-1)"
+
+  have *: "?g x k =
+      real k powr (real k0 - real k) * real k powr (x - real k0 - 1/2) * exp (real k-1)" for k x
+    by (auto simp add: powr_add[symmetric] cancel_ab_semigroup_add_class.diff_right_commute)
+
+  have "x < k0 \<Longrightarrow>
+      (\<lambda>y. (real x / real k0) powr (real y - real k0 - 1 / 2))
+         \<longlonglongrightarrow> 0" for x
+  proof -
+    assume xlt: "x < k0"
+    have *: "(real x / real k0) powr (real y - real k0 - 1 / 2) =
+      (real x / real k0) ^ y / (real x / real k0)  powr (real k0 + 1 / 2)" for y
+      by (smt (verit) divide_eq_0_iff divide_nonneg_nonneg of_nat_0_le_iff powr_def powr_diff powr_realpow)
+
+    have "(\<lambda>y. (real x / real k0) ^ y) \<longlonglongrightarrow> 0"
+      using LIMSEQ_realpow_zero xlt by auto
+    thus ?thesis unfolding *
+      using tendsto_divide_zero by blast 
+  qed
+
+  then have "(\<lambda>x::nat. \<Sum>k<k0. real k powr (real k0 - real k) * real k powr (x - real k0 - 1/2) * exp (real k-1))
+    \<in> o(\<lambda>x::nat. ?g x k0)"
+    apply (intro big_sum_in_smallo)
+    by (auto intro!:  smalloI_tendsto simp add: powr_divide[symmetric])
+
+  then have o1:"(\<lambda>x::nat. \<Sum>k<k0. ?g x k)
+    \<in> o(\<lambda>x::nat. ?g x k0)"
+    unfolding *
+    by auto
+
+  have summable: "summable (?g (real x))" for x
+    sorry
+
+  show ?thesis
+    apply (intro truncated_series_asymp_equiv_1[OF summable])
+    using o1 by auto
 qed
 
 end
